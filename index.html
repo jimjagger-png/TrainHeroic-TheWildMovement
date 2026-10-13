@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrainHeroic Strength Tracker & Pack Standards</title>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #0e1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --accent: #58a6ff;
+            --text-main: #f0f6fc;
+            --text-muted: #8b949e;
+            --baby-cub: #8b949e;
+            --pack-squad: #3fb950;
+            --pack-leader: #58a6ff;
+            --big-bad-wolf: #d29922;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 24px;
+        }
+        .container { max-width: 1240px; margin: 0 auto; }
+        h1 { margin: 0 0 6px 0; color: var(--accent); font-size: 26px; }
+        p.subtitle { color: var(--text-muted); margin: 0 0 20px 0; font-size: 14px; }
+        
+        .profile-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .field-group { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+        input[type="number"], select {
+            background: #0d1117;
+            color: #fff;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .file-box {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 18px;
+            text-align: center;
+            background: rgba(22, 27, 34, 0.5);
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .file-box:hover { border-color: var(--accent); }
+        .tier-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .tier-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            text-align: center;
+        }
+        .tier-card.active { border-color: var(--accent); box-shadow: 0 0 10px rgba(88, 166, 255, 0.2); }
+        .tier-name { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+        .tier-val { font-size: 20px; font-weight: 700; margin-top: 6px; }
+        
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            text-align: center;
+        }
+        .kpi-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+        .kpi-value { font-size: 22px; font-weight: 700; color: var(--accent); margin-top: 4px; }
+        .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        
+        .chart-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: #21262d; color: var(--text-muted); font-weight: 600; }
+        tr:hover { background: #1c2128; }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>TrainHeroic Strength Tracker & Pack Standards</h1>
+    <p class="subtitle">Interactive tracking with dynamic Pack Strength tiers adjusted to your sex, height, and weight.</p>
+
+    <div class="profile-bar">
+        <div class="field-group">
+            <label for="sexSelect">Sex:</label>
+            <select id="sexSelect" onchange="recalculateAll()">
+                <option value="Male" selected>Male</option>
+                <option value="Female">Female</option>
+            </select>
+        </div>
+        <div class="field-group">
+            <label for="bwInput">Bodyweight (kg):</label>
+            <input type="number" id="bwInput" value="70" step="0.5" min="30" max="250" onchange="recalculateAll()" oninput="recalculateAll()">
+        </div>
+        <div class="field-group">
+            <label for="heightInput">Height (cm):</label>
+            <input type="number" id="heightInput" value="175" step="1" min="100" max="250" onchange="recalculateAll()" oninput="recalculateAll()">
+        </div>
+        <div class="field-group" style="margin-left: auto;">
+            <label for="exSelect">Selected Lift:</label>
+            <select id="exSelect" onchange="renderActiveExercise()"></select>
+        </div>
+    </div>
+
+    <div class="file-box" id="dropArea">
+        <label for="filePicker" style="cursor: pointer; display: block;">
+            <strong>Drop your TrainHeroic export .zip or training_data.csv here</strong><br>
+            <span style="font-size: 12px; color: var(--text-muted);">or click to browse files locally</span>
+        </label>
+        <input type="file" id="filePicker" accept=".zip,.csv" style="display:none;" onchange="handleFile(this.files[0])">
+    </div>
+
+    <div class="tier-grid">
+        <div class="tier-card" id="cardBabyCub">
+            <div class="tier-name" style="color: var(--baby-cub);">Baby Cub</div>
+            <div class="tier-val" id="valBabyCub">-</div>
+        </div>
+        <div class="tier-card" id="cardPackSquad">
+            <div class="tier-name" style="color: var(--pack-squad);">Pack Squad</div>
+            <div class="tier-val" id="valPackSquad">-</div>
+        </div>
+        <div class="tier-card" id="cardPackLeader">
+            <div class="tier-name" style="color: var(--pack-leader);">Pack Leader</div>
+            <div class="tier-val" id="valPackLeader">-</div>
+        </div>
+        <div class="tier-card" id="cardBigBadWolf">
+            <div class="tier-name" style="color: var(--big-bad-wolf);">Big Bad Wolf</div>
+            <div class="tier-val" id="valBigBadWolf">-</div>
+        </div>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-title">Peak Estimated 1RM</div>
+            <div class="kpi-value" id="kpi1rm">-</div>
+            <div class="kpi-sub" id="kpi1rmRatio">-</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Top Working Weight</div>
+            <div class="kpi-value" id="kpiLoad">-</div>
+            <div class="kpi-sub" id="kpiLoadRatio">-</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Current Pack Tier</div>
+            <div class="kpi-value" id="kpiTier" style="font-size: 18px; margin-top: 6px;">-</div>
+            <div class="kpi-sub" id="kpiTierSub">Based on Peak e1RM</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Total Volume Lifted</div>
+            <div class="kpi-value" id="kpiVol">-</div>
+            <div class="kpi-sub" id="kpiSets">-</div>
+        </div>
+    </div>
+
+    <div class="chart-box">
+        <div id="chartProgression" style="height: 440px;"></div>
+    </div>
+
+    <div class="chart-box">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px; color: var(--accent);">Logged Set History</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Workout</th>
+                    <th>Set</th>
+                    <th>Reps</th>
+                    <th>Load (kg)</th>
+                    <th>% Bodyweight</th>
+                    <th>Estimated 1RM</th>
+                    <th>Volume (kg)</th>
+                </tr>
+            </thead>
+            <tbody id="setsTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Suppress window drag & drop downloads
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+        window.addEventListener(name, e => e.preventDefault(), false);
+    });
+
+    const dropArea = document.getElementById('dropArea');
+    dropArea.addEventListener('drop', e => {
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    // Standards benchmark definitions relative to 70kg male baseline
+    const STANDARDS_BASE = {
+        'Bench Press': { cub: 0.75, squad: 1.00, leader: 1.25, wolf: 1.50, isUpper: true, repTarget: '1RM' },
+        'Back Squat': { cub: 0.75, squad: 1.00, leader: 1.50, wolf: 2.00, isUpper: false, repTarget: '1RM' },
+        'Front Squat': { cub: 0.70, squad: 0.85, leader: 1.20, wolf: 1.50, isUpper: false, repTarget: '1RM' },
+        'Barbell Deadlift': { cub: 1.00, squad: 1.50, leader: 1.75, wolf: 2.20, isUpper: false, repTarget: '1RM' },
+        'Trapbar Deadlift': { cub: 1.10, squad: 1.60, leader: 1.85, wolf: 2.30, isUpper: false, repTarget: '1RM' },
+        'Trap Bar Deadlift': { cub: 1.10, squad: 1.60, leader: 1.85, wolf: 2.30, isUpper: false, repTarget: '1RM' },
+        'Romanian Deadlift (RDL)': { cub: 0.857, squad: 1.00, leader: 1.40, wolf: 1.85, isUpper: false, repTarget: '10 reps' },
+        'RDL': { cub: 0.857, squad: 1.00, leader: 1.40, wolf: 1.85, isUpper: false, repTarget: '10 reps' },
+        'Shoulder Press': { cub: 0.50, squad: 0.60, leader: 0.75, wolf: 0.90, isUpper: true, repTarget: '1RM' },
+        'Hip Thrust': { cub: 0.70, squad: 1.00, leader: 1.65, wolf: 2.50, isUpper: false, repTarget: '5 reps' },
+        'Weighted Pull Up': { cub: 0.10, squad: 0.20, leader: 0.30, wolf: 0.40, isUpper: true, repTarget: '+kg' },
+        'Weighted Pull Ups': { cub: 0.10, squad: 0.20, leader: 0.30, wolf: 0.40, isUpper: true, repTarget: '+kg' },
+        'Weighted Chin Up': { cub: 0.10, squad: 0.20, leader: 0.35, wolf: 0.45, isUpper: true, repTarget: '+kg' },
+        'Broad Jump': { cub_rel: 1.00, squad_rel: 1.20, leader_rel: 1.40, wolf_rel: 1.60, isJump: true }
+    };
+
+    let globalParsedSets = [];
+
+    function handleFile(file) {
+        if (!file) return;
+        if (file.name.endsWith('.zip')) {
+            JSZip.loadAsync(file).then(zip => {
+                const target = Object.keys(zip.files).find(n => n.includes('training_data.csv'));
+                if (!target) {
+                    alert('Could not find training_data.csv inside the zip.');
+                    return;
+                }
+                return zip.file(target).async('string');
+            }).then(csvContent => {
+                parseCSV(csvContent);
+            }).catch(err => alert('Error parsing zip: ' + err.message));
+        } else {
+            const reader = new FileReader();
+            reader.onload = e => parseCSV(e.target.result);
+            reader.readAsText(file);
+        }
+    }
+
+    function parseCSV(csvText) {
+        Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                processRows(results.data);
+            }
+        });
+    }
+
+    function processRows(rows) {
+        const records = [];
+        rows.forEach(row => {
+            const raw = String(row.ExerciseData || '').trim();
+            if (!/\d/.test(raw)) return;
+
+            const parts = raw.split(/\s*x\s*/);
+            const left = parts[0] || '';
+            const right = parts[1] || '';
+
+            const leftMatch = left.match(/^(.*?)\s*([a-zA-Z]+)?$/);
+            const repStr = leftMatch ? leftMatch[1].trim() : left;
+            const metricType = (leftMatch && leftMatch[2]) ? leftMatch[2].trim() : 'rep';
+
+            const rightMatch = right.match(/^(.*?)\s*([a-zA-Z]+)?$/);
+            const loadStr = rightMatch ? rightMatch[1].trim() : '';
+
+            const reps = repStr.split(',').map(s => s.trim()).filter(Boolean);
+            const loads = loadStr.split(',').map(s => s.trim()).filter(Boolean);
+
+            const numSets = Math.max(reps.length, loads.length);
+            for (let i = 0; i < numSets; i++) {
+                const rVal = reps[i] !== undefined ? reps[i] : (reps[reps.length - 1] || '');
+                const lVal = loads[i] !== undefined ? loads[i] : (loads[loads.length - 1] || '');
+
+                const lbs = parseFloat(lVal);
+                const kg = (!isNaN(lbs) && lbs > 0) ? Math.round((lbs / 2.20462262) * 10) / 10 : null;
+                const rNum = parseFloat(rVal);
+
+                const e1rm = (kg && !isNaN(rNum) && metricType === 'rep') ? Math.round(kg * (1 + rNum / 30.0) * 10) / 10 : null;
+                const vol = (kg && !isNaN(rNum) && metricType === 'rep') ? Math.round(kg * rNum * 10) / 10 : null;
+
+                records.push({
+                    Date: row.ScheduledDate || row.Date || '',
+                    Workout: row.WorkoutTitle || '',
+                    Exercise: row.ExerciseTitle || '',
+                    Set: i + 1,
+                    Reps: !isNaN(rNum) ? rNum : rVal,
+                    Metric_Type: metricType,
+                    Load_kg: kg,
+                    Estimated_1RM_kg: e1rm,
+                    Volume_kg: vol
+                });
+            }
+        });
+
+        globalParsedSets = records;
+        populateExerciseDropdown();
+        recalculateAll();
+    }
+
+    function populateExerciseDropdown() {
+        const weighted = globalParsedSets.filter(s => s.Load_kg > 0);
+        const exCounts = {};
+        weighted.forEach(s => exCounts[s.Exercise] = (exCounts[s.Exercise] || 0) + 1);
+
+        const coreOrder = ['Bench Press', 'RDL', 'Romanian Deadlift (RDL)', 'Back Squat', 'Front Squat', 'Barbell Deadlift', 'Trap Bar Deadlift', 'Shoulder Press'];
+        const allExercises = Object.keys(exCounts).sort((a, b) => {
+            const idxA = coreOrder.indexOf(a);
+            const idxB = coreOrder.indexOf(b);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return exCounts[b] - exCounts[a];
+        });
+
+        const select = document.getElementById('exSelect');
+        select.innerHTML = allExercises.map(ex => `<option value="${ex}">${ex}</option>`).join('');
+    }
+
+    function getAthleteGoals(exercise, bw, height, sex) {
+        const std = STANDARDS_BASE[exercise];
+        if (!std) return null;
+
+        const sexFactor = sex === 'Female' ? (std.isUpper ? 0.70 : 0.80) : 1.00;
+
+        if (std.isJump) {
+            return {
+                cub: Math.round(height * std.cub_rel),
+                squad: Math.round(height * std.squad_rel),
+                leader: Math.round(height * std.leader_rel),
+                wolf: Math.round(height * std.wolf_rel),
+                unit: 'cm'
+            };
+        }
+
+        return {
+            cub: Math.round(bw * std.cub * sexFactor * 10) / 10,
+            squad: Math.round(bw * std.squad * sexFactor * 10) / 10,
+            leader: Math.round(bw * std.leader * sexFactor * 10) / 10,
+            wolf: Math.round(bw * std.wolf * sexFactor * 10) / 10,
+            unit: 'kg'
+        };
+    }
+
+    function recalculateAll() {
+        renderActiveExercise();
+    }
+
+    function renderActiveExercise() {
+        const ex = document.getElementById('exSelect').value;
+        const bw = parseFloat(document.getElementById('bwInput').value) || 70;
+        const height = parseFloat(document.getElementById('heightInput').value) || 175;
+        const sex = document.getElementById('sexSelect').value;
+
+        const goals = getAthleteGoals(ex, bw, height, sex);
+
+        // Update Tier Cards
+        if (goals) {
+            document.getElementById('valBabyCub').innerText = goals.cub + ' ' + goals.unit;
+            document.getElementById('valPackSquad').innerText = goals.squad + ' ' + goals.unit;
+            document.getElementById('valPackLeader').innerText = goals.leader + ' ' + goals.unit;
+            document.getElementById('valBigBadWolf').innerText = goals.wolf + ' ' + goals.unit;
+        } else {
+            ['valBabyCub', 'valPackSquad', 'valPackLeader', 'valBigBadWolf'].forEach(id => {
+                document.getElementById(id).innerText = '-';
+            });
+        }
+
+        const filtered = globalParsedSets.filter(s => s.Exercise === ex);
+        const weighted = filtered.filter(s => s.Load_kg > 0);
+
+        let peak1rm = 0;
+        let peakLoad = 0;
+        let totalVol = 0;
+
+        weighted.forEach(s => {
+            if (s.Estimated_1RM_kg && s.Estimated_1RM_kg > peak1rm) peak1rm = s.Estimated_1RM_kg;
+            if (s.Load_kg && s.Load_kg > peakLoad) peakLoad = s.Load_kg;
+            if (s.Volume_kg) totalVol += s.Volume_kg;
+        });
+
+        document.getElementById('kpi1rm').innerText = peak1rm ? peak1rm + ' kg' : '-';
+        document.getElementById('kpi1rmRatio').innerText = peak1rm ? (peak1rm / bw).toFixed(2) + 'x BW' : '-';
+
+        document.getElementById('kpiLoad').innerText = peakLoad ? peakLoad + ' kg' : '-';
+        document.getElementById('kpiLoadRatio').innerText = peakLoad ? (peakLoad / bw).toFixed(2) + 'x BW' : '-';
+
+        document.getElementById('kpiVol').innerText = totalVol ? Math.round(totalVol).toLocaleString() + ' kg' : '-';
+        document.getElementById('kpiSets').innerText = weighted.length + ' logged sets';
+
+        // Evaluate Current Tier
+        let currentTier = '-';
+        ['cardBabyCub', 'cardPackSquad', 'cardPackLeader', 'cardBigBadWolf'].forEach(c => document.getElementById(c).classList.remove('active'));
+
+        if (goals && peak1rm > 0) {
+            if (peak1rm >= goals.wolf) {
+                currentTier = 'Big Bad Wolf 🐺';
+                document.getElementById('cardBigBadWolf').classList.add('active');
+            } else if (peak1rm >= goals.leader) {
+                currentTier = 'Pack Leader ⚡';
+                document.getElementById('cardPackLeader').classList.add('active');
+            } else if (peak1rm >= goals.squad) {
+                currentTier = 'Pack Squad 🐾';
+                document.getElementById('cardPackSquad').classList.add('active');
+            } else if (peak1rm >= goals.cub) {
+                currentTier = 'Baby Cub 🌱';
+                document.getElementById('cardBabyCub').classList.add('active');
+            } else {
+                currentTier = 'Building Base';
+            }
+        }
+        document.getElementById('kpiTier').innerText = currentTier;
+
+        // Group sets by date for Plotly chart
+        const byDate = {};
+        weighted.forEach(s => {
+            if (!byDate[s.Date]) byDate[s.Date] = { maxLoad: 0, peak1rm: 0 };
+            if (s.Load_kg > byDate[s.Date].maxLoad) byDate[s.Date].maxLoad = s.Load_kg;
+            if (s.Estimated_1RM_kg > byDate[s.Date].peak1rm) byDate[s.Date].peak1rm = s.Estimated_1RM_kg;
+        });
+
+        const dates = Object.keys(byDate).sort();
+        const loads = dates.map(d => byDate[d].maxLoad);
+        const e1rms = dates.map(d => byDate[d].peak1rm);
+
+        const traces = [
+            {
+                x: dates, y: loads,
+                mode: 'lines+markers', name: 'Top Weight (kg)',
+                line: { color: '#58a6ff', width: 3 },
+                marker: { size: 8 }
+            },
+            {
+                x: dates, y: e1rms,
+                mode: 'lines+markers', name: 'Estimated 1RM (kg)',
+                line: { color: '#f78166', width: 2, dash: 'dot' },
+                marker: { size: 7 }
+            }
+        ];
+
+        // Benchmark Lines
+        const shapes = [];
+        if (goals && dates.length > 0) {
+            const tiers = [
+                { val: goals.cub, color: 'rgba(139, 148, 158, 0.6)', name: 'Baby Cub' },
+                { val: goals.squad, color: 'rgba(63, 185, 80, 0.6)', name: 'Pack Squad' },
+                { val: goals.leader, color: 'rgba(88, 166, 255, 0.6)', name: 'Pack Leader' },
+                { val: goals.wolf, color: 'rgba(210, 153, 34, 0.6)', name: 'Big Bad Wolf' }
+            ];
+
+            tiers.forEach(t => {
+                shapes.push({
+                    type: 'line',
+                    xref: 'paper', x0: 0, x1: 1,
+                    yref: 'y', y0: t.val, y1: t.val,
+                    line: { color: t.color, width: 1.5, dash: 'dash' }
+                });
+            });
+        }
+
+        const layout = {
+            title: { text: ex + ' - Progression vs. Pack Standards', font: { color: '#ffffff', size: 17 } },
+            paper_bgcolor: '#161b22', plot_bgcolor: '#161b22',
+            xaxis: { color: '#8b949e', gridcolor: '#30363d' },
+            yaxis: { color: '#8b949e', gridcolor: '#30363d', title: 'Weight (kg)' },
+            legend: { font: { color: '#ffffff' } },
+            shapes: shapes
+        };
+
+        Plotly.newPlot('chartProgression', traces, layout);
+
+        // Populate Table
+        const tbody = document.getElementById('setsTableBody');
+        tbody.innerHTML = weighted.slice().reverse().map(s => `
+            <tr>
+                <td>${s.Date}</td>
+                <td>${s.Workout}</td>
+                <td>Set ${s.Set}</td>
+                <td>${s.Reps}</td>
+                <td><strong>${s.Load_kg} kg</strong></td>
+                <td style="color:#8b949e;">${(s.Load_kg / bw).toFixed(2)}x</td>
+                <td style="color:#f78166; font-weight:600;">${s.Estimated_1RM_kg || '-'} kg</td>
+                <td>${s.Volume_kg ? s.Volume_kg + ' kg' : '-'}</td>
+            </tr>
+        `).join('');
+    }
+</script>
+</body>
+</html>
